@@ -1,81 +1,72 @@
 import os
 import hashlib
-from pathlib import Path
 import shutil
+import time
+from pathlib import Path
+from collections import defaultdict
+from PIL import Image
+from PIL.ExifTags import TAGS
 
-
-def calculate_hash(file_path, chunk_size=4096):
-    """Calculate the hash of a file to identify duplicates."""
-    hash_obj = hashlib.md5()
+def hash_file(file_path):
+    """Compute the hash of a file based on its content."""
+    hash_md5 = hashlib.md5()
     with open(file_path, "rb") as f:
-        while chunk := f.read(chunk_size):
-            hash_obj.update(chunk)
-    return hash_obj.hexdigest()
+        while chunk := f.read(4096):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+def get_camera_and_creation_date(file_path):
+    """Retrieve camera name and photo creation date from the file's EXIF metadata.
+['PrintImageMatching', 'ResolutionUnit', 'ExifOffset', 'Make', 'Model', 'Software', 'Orientation', 'DateTime', 'YCbCrPositioning', 'YResolution', 'Copyright', 'XResolution', 'Artist', 'ExifVersion', 'ComponentsConfiguration', 'CompressedBitsPerPixel', 'DateTimeOriginal', 'DateTimeDigitized', 'ShutterSpeedValue', 'ApertureValue', 'BrightnessValue', 'ExposureBiasValue', 'MaxApertureValue', 'MeteringMode', 'LightSource', 'Flash', 'FocalLength', 'UserComment', 'ColorSpace', 'OffsetTime', 'OffsetTimeOriginal', 'OffsetTimeDigitized', 'ExifImageWidth', 'ExifImageHeight', 'FocalPlaneXResolution', 'FocalPlaneYResolution', 'FocalPlaneResolutionUnit', 'SensingMethod', 'FileSource', 'ExposureTime', 'ExifInteroperabilityOffset', 'FNumber', 'SceneType', 'ExposureProgram', 'CustomRendered', 'ISOSpeedRatings', 'ExposureMode', 'FlashPixVersion', 'SensitivityType', 'WhiteBalance', 'BodySerialNumber', 'LensSpecification', 'LensMake', 'LensModel', 'LensSerialNumber', 'FocalLengthIn35mmFilm', 'SceneCaptureType', 'Sharpness', 'SubjectDistanceRange', 'MakerNote']
 
 
-def find_duplicates(root_folder):
-    """Find and return a dictionary of duplicates. The key will be the hash of the file,
-    and the value will be a list of files with that hash."""
-    file_hashes = {}
+    """
+    try:
+        image = Image.open(file_path)
+        exif_data = image._getexif()
+        exif = {TAGS.get(tag): value for tag, value in exif_data.items() if tag in TAGS}
+
+        # Extract camera make and model
+        camera_make = exif.get('Make')
+        camera_model = exif.get('Model')
+
+        camera_name = '_'.join([camera_make, camera_model]) if (camera_make is not None) & (camera_model is not None) else 'UnknownCamera'
+
+        # Extract creation date
+        date_taken = exif.get('DateTime', time.strftime("%Y:%m:%d", time.gmtime(os.path.getmtime(file_path))))
+        year, month, day = date_taken[:10].split(":")
+
+        return camera_name, f"{year}/{month}/{day}"
+    except Exception as e:
+        print(f"Could not process EXIF data for {file_path}: {e}")
+        return "UnknownCamera", time.strftime("%Y/%m/%d", time.gmtime(os.path.getmtime(file_path)))
+
+def organize_files(source_folder, output_folder):
+    """Organize files in the output folder, deduplicating by content and using symlinks."""
+    hash_map = defaultdict(list)
     
-    for foldername, _, filenames in os.walk(root_folder):
-        for filename in filenames:
-            file_path = os.path.join(foldername, filename)
-            file_hash = calculate_hash(file_path)
-            
-            if file_hash not in file_hashes:
-                file_hashes[file_hash] = [file_path]
-            else:
-                file_hashes[file_hash].append(file_path)
-    
-    # Filter out non-duplicate hashes
-    duplicates = {hash_val: files for hash_val, files in file_hashes.items() if len(files) > 1}
-    
-    return duplicates
+    # Walk through all files in the source folder recursively
+    for root, dirs, files in os.walk(source_folder):
+        for file_name in files:
+            file_path = os.path.join(root, file_name)
+            file_hash = hash_file(file_path)
+            hash_map[file_hash].append(file_path)
 
-
-def create_symlinks(duplicates, output_folder):
-    """Create symbolic links for duplicate files in the output folder."""
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-    
-    for file_hash, files in duplicates.items():
-        # Use the first file as the original
-        original_file = files[0]
-        original_file_name = os.path.basename(original_file)
-        original_output_path = os.path.join(output_folder, original_file_name)
-
-        # Copy the original file to the output folder if not already done
-        if not os.path.exists(original_output_path):
-            shutil.copy2(original_file, original_output_path)
-
-        # Create symbolic links for all other duplicates
-        for duplicate_file in files[1:]:
-            symlink_name = os.path.join(output_folder, os.path.basename(duplicate_file))
-            if not os.path.exists(symlink_name):
-                os.symlink(original_output_path, symlink_name)
-                print(f"Created symlink: {symlink_name} -> {original_output_path}")
-
-
-def main(root_folder, output_folder):
-    """Main function to find duplicates and create symlinks."""
-    print(f"Searching for duplicates in folder: {root_folder}")
-    
-    # Step 1: Find duplicates
-    duplicates = find_duplicates(root_folder)
-    if duplicates:
-        print(f"Found {len(duplicates)} sets of duplicates. Creating symlinks...")
+    # Deduplicate and organize based on EXIF data
+    for file_hash, file_list in hash_map.items():
+        # Pick the most recent or random file if multiple instances exist
+        most_recent_file = max(file_list, key=lambda f: os.path.getmtime(f))
         
-        # Step 2: Create symlinks in the output folder
-        create_symlinks(duplicates, output_folder)
-        print(f"Symlinks created in folder: {output_folder}")
-    else:
-        print("No duplicates found.")
+        # Extract camera name and creation date
+        camera_name, creation_date = get_camera_and_creation_date(most_recent_file)
 
+        # Create the target folder structure
+        target_dir = os.path.join(output_folder, camera_name, creation_date)
+        os.makedirs(target_dir, exist_ok=True)
 
-if __name__ == "__main__":
-    # Define the folder to search and the output folder
-    root_folder = "/path/to/your/folder"  # Replace with the path you want to search
-    output_folder = "/path/to/output/folder"  # Replace with the path for output
-    
-    main(root_folder, output_folder)
+        # Symlink or copy the most recent file into the target folder
+        for file_path in file_list:
+            target_symlink = os.path.join(target_dir, os.path.basename(file_path))
+            if not os.path.exists(target_symlink):
+                os.symlink(file_path, target_symlink)
+
