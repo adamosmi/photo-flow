@@ -57,8 +57,10 @@ def organize_files(source_folder, output_folder):
         for file_name in files:
             if os.path.splitext(file_name)[1].lower().strip() in IMAGE_EXTENSIONS:
                 file_path = os.path.join(path, file_name)
-                file_hash = hash_file(file_path)
-                image_hash_map[file_hash].append(file_path)
+                # Ensure the file is not a symlink
+                if not os.path.islink(file_path):
+                    file_hash = hash_file(file_path)
+                    image_hash_map[file_hash].append(file_path)
     # Deduplicate and organize based on EXIF data
     for file_hash, file_list in image_hash_map.items():
         # Pick the most recent or random file if multiple instances exist
