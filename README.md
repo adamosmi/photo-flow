@@ -37,7 +37,7 @@ pip install -r requirements.txt
    Clone this repository into a folder that contains the media files (images/videos) you want to organize.
 
 ```bash
-git clone https://github.com/yourusername/photo-organizer.git
+git clone https://github.com/adamosmi/photo-flow.git
 ```
 
 2. **Run the Script:**
