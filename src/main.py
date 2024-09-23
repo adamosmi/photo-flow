@@ -4,7 +4,6 @@ import time
 from collections import defaultdict
 from PIL import Image
 from PIL.ExifTags import TAGS
-import shutil
 
 IMAGE_EXTENSIONS = [
     ".jpeg", ".jpg", ".png", ".gif", ".bmp", ".tiff", ".tif", 
@@ -48,9 +47,6 @@ def output_video_path(file_path):
 
 def organize_files(source_folder, output_folder):
     """Organize files in the output folder, deduplicating by content and using symlinks."""
-    # Check if the directory exists before attempting to remove
-    if os.path.exists(output_folder) and os.path.isdir(output_folder):
-        shutil.rmtree(output_folder)
     image_hash_map = defaultdict(list)
     # Walk through all files in the source folder recursively
     for path, _, files in os.walk(source_folder):
