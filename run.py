@@ -12,7 +12,7 @@ current_directory = os.path.dirname(current_script_path)
 
 # Get the parent directory of the current directory
 parent_directory = os.path.dirname(current_directory)
-output_directory = os.path.join(parent_directory, 'photo-flow')
+output_directory = os.path.join(parent_directory, 'photo-flow-output')
 
 organize_files(source_folder=parent_directory, output_folder=parent_directory)
 
