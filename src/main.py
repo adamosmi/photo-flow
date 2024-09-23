@@ -16,6 +16,8 @@ VIDEO_EXTENSIONS = [
     ".webm", ".3gp", ".mpeg", ".mpg", ".mts", ".m2ts"
 ]
 
+CAMERA_NAME_ALIASES = {"FUJIFILM_X-T4": "Fuji_XT4"}
+
 def hash_file(file_path):
     """Compute the hash of a file based on its content."""
     hash_md5 = hashlib.md5()
@@ -63,6 +65,7 @@ def organize_files(source_folder, output_folder):
         most_recent_file = min(file_list, key=lambda f: os.path.getmtime(f))
         # Extract camera name and creation date
         camera_name, creation_year, creation_date = output_image_path(most_recent_file)
+        camera_name = CAMERA_NAME_ALIASES.get(camera_name, camera_name)
         # Create the target folder structure
         target_dir = os.path.join(output_folder, camera_name, creation_year,  creation_date)
         os.makedirs(target_dir, exist_ok=True)
