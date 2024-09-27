@@ -28,20 +28,23 @@ class ImageViewer:
         self.current_image_index = -1  # Start before the first image
         self.selected_files = []  # List to hold selected files
 
-        # Create canvas to display images
-        self.canvas = tk.Canvas(root, bg="white")
-        self.canvas.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
-
-        # Create sidebar for selected images
+        # Create sidebar for selected images (on the left)
         self.sidebar = tk.Frame(root, width=200, bg='lightgrey')
-        self.sidebar.pack(fill=tk.Y, side=tk.RIGHT)
+        self.sidebar.pack(fill=tk.Y, side=tk.LEFT)
         self.listbox = Listbox(self.sidebar, width=30, height=50)
         self.listbox.pack(side=tk.TOP, fill=tk.Y)
         self.listbox.bind('<<ListboxSelect>>', self.on_sidebar_select)
 
+        # Create canvas to display images (on the right)
+        self.canvas = tk.Canvas(root, bg="white")
+        self.canvas.pack(fill=tk.BOTH, expand=True, side=tk.RIGHT)
+
         # Create a label for image counter
         self.image_counter_label = tk.Label(self.canvas, text="", bg="white", font=("Helvetica", 14))
         self.image_counter_label.place(relx=0.95, rely=0.05, anchor=tk.NE)
+
+        # Load selected images in the sidebar on start
+        self.load_selected_images()
 
         # Load the first image when the user presses 'Right' or 'Next'
         self.show_next_image()
@@ -171,14 +174,24 @@ class ImageViewer:
     def update_sidebar(self):
         """Update the sidebar with the selected images."""
         self.listbox.delete(0, tk.END)
-        for file in self.selected_files:
-            self.listbox.insert(tk.END, file)
+        for index, file in enumerate(self.selected_files):
+            display_text = f"{index + 1} - {file}"
+            self.listbox.insert(tk.END, display_text)
+
+    def load_selected_images(self):
+        """Load the already selected images from the selects folder."""
+        if os.path.exists(self.selects_folder):
+            selected_files = [f for f in sorted(os.listdir(self.selects_folder)) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
+            self.selected_files.extend(selected_files)
+            self.update_sidebar()
 
     def on_sidebar_select(self, event):
         """Navigate to the image when a file is selected in the sidebar."""
         selected_index = self.listbox.curselection()
         if selected_index:
-            file_name = self.listbox.get(selected_index[0])
+            # Strip off the index before the file name
+            display_text = self.listbox.get(selected_index[0])
+            file_name = display_text.split(' - ', 1)[1]  # Get file name after the index
             if file_name in self.image_files:
                 self.current_image_index = self.image_files.index(file_name)
                 self.show_image()
@@ -191,7 +204,6 @@ class ImageViewer:
         """Exit full screen and close the application."""
         self.root.attributes('-fullscreen', False)
         self.root.quit()
-
 
 if __name__ == "__main__":
     root = tk.Tk()
