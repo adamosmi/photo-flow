@@ -2,7 +2,7 @@ import os
 import sqlite3
 import tkinter as tk
 from tkinter import filedialog
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ExifTags, ImageOps
 import io
 
 class ImageViewer:
@@ -73,6 +73,30 @@ class ImageViewer:
         result = self.cursor.fetchone()
         return result if result else (None, None)
 
+    def correct_image_orientation(self, image):
+        """Correct image orientation based on EXIF metadata."""
+        try:
+            # Get EXIF data
+            exif = image._getexif()
+            if exif:
+                for tag, value in ExifTags.TAGS.items():
+                    if value == 'Orientation':
+                        orientation = exif.get(tag)
+                        break
+
+                # Rotate or flip the image based on the orientation
+                if orientation == 3:
+                    image = image.rotate(180, expand=True)
+                elif orientation == 6:
+                    image = image.rotate(270, expand=True)
+                elif orientation == 8:
+                    image = image.rotate(90, expand=True)
+        except (AttributeError, KeyError, IndexError):
+            # Cases where there is no EXIF data or orientation tag
+            pass
+
+        return image
+
     def show_image(self):
         """Display the current image."""
         file_name, image_data = self.get_image_data(self.current_image_index)
@@ -80,6 +104,9 @@ class ImageViewer:
         if image_data:
             # Convert the binary data into a Pillow image
             image = Image.open(io.BytesIO(image_data))
+
+            # Correct the orientation based on EXIF data
+            image = self.correct_image_orientation(image)
 
             # Resize the image while keeping aspect ratio
             screen_width = self.root.winfo_screenwidth()
