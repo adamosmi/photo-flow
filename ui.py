@@ -26,7 +26,7 @@ class ImageViewer:
         self.total_images = len(self.image_files)
         
         self.current_image_index = -1  # Start before the first image
-        self.selected_files = []  # List to hold selected files
+        self.selected_files = []  # List to hold selected file indexes
 
         # Create sidebar for selected images (on the left)
         self.sidebar = tk.Frame(root, width=200, bg='lightgrey')
@@ -66,7 +66,6 @@ class ImageViewer:
 
     def load_image_data(self, image_index):
         """Load image binary data into the SQLite database progressively."""
-        # Check if the image already exists in the database
         file_name = self.image_files[image_index]
         self.cursor.execute('SELECT id FROM images WHERE file_name = ?', (file_name,))
         if self.cursor.fetchone() is not None:
@@ -74,19 +73,30 @@ class ImageViewer:
 
         # If not, load the image and store it in the database
         file_path = os.path.join(self.image_folder, file_name)
-        with open(file_path, 'rb') as file:
-            binary_data = file.read()
-            self.cursor.execute('INSERT INTO images (file_name, image_data) VALUES (?, ?)', (file_name, binary_data))
-            self.conn.commit()
+        try:
+            with open(file_path, 'rb') as file:
+                binary_data = file.read()
+                self.cursor.execute('INSERT INTO images (file_name, image_data) VALUES (?, ?)', (file_name, binary_data))
+                self.conn.commit()
+        except Exception as e:
+            print(f"Error loading image {file_name}: {e}")
 
     def get_image_data(self, image_index):
         """Get the binary data and file name of the image at a given index from the database."""
+        if image_index < 0 or image_index >= self.total_images:
+            print(f"Invalid image index: {image_index}")
+            return None, None
+        
         self.load_image_data(image_index)  # Load the image data if not already in the database
 
         file_name = self.image_files[image_index]
         self.cursor.execute('SELECT file_name, image_data FROM images WHERE file_name = ?', (file_name,))
         result = self.cursor.fetchone()
-        return result if result else (None, None)
+        if result:
+            return result
+        else:
+            print(f"Failed to retrieve image data for {file_name}")
+            return None, None
 
     def correct_image_orientation(self, image):
         """Correct image orientation based on EXIF metadata."""
@@ -117,24 +127,27 @@ class ImageViewer:
         file_name, image_data = self.get_image_data(self.current_image_index)
 
         if image_data:
-            # Convert the binary data into a Pillow image
-            image = Image.open(io.BytesIO(image_data))
+            try:
+                # Convert the binary data into a Pillow image
+                image = Image.open(io.BytesIO(image_data))
 
-            # Correct the orientation based on EXIF data
-            image = self.correct_image_orientation(image)
+                # Correct the orientation based on EXIF data
+                image = self.correct_image_orientation(image)
 
-            # Resize the image while keeping aspect ratio
-            screen_width = self.root.winfo_screenwidth()
-            screen_height = self.root.winfo_screenheight()
-            image = self.resize_image(image, screen_width, screen_height)
+                # Resize the image while keeping aspect ratio
+                screen_width = self.root.winfo_screenwidth()
+                screen_height = self.root.winfo_screenheight()
+                image = self.resize_image(image, screen_width, screen_height)
 
-            # Display the image
-            self.tk_image = ImageTk.PhotoImage(image)
-            self.canvas.delete("all")
-            self.canvas.create_image(screen_width // 2, screen_height // 2, image=self.tk_image, anchor=tk.CENTER)
+                # Display the image
+                self.tk_image = ImageTk.PhotoImage(image)
+                self.canvas.delete("all")
+                self.canvas.create_image(screen_width // 2, screen_height // 2, image=self.tk_image, anchor=tk.CENTER)
 
-            # Update image counter
-            self.update_image_counter()
+                # Update image counter
+                self.update_image_counter()
+            except Exception as e:
+                print(f"Error displaying image {file_name}: {e}")
 
     def resize_image(self, image, max_width, max_height):
         """Resize image while preserving the aspect ratio."""
@@ -148,12 +161,16 @@ class ImageViewer:
         if self.current_image_index < self.total_images - 1:
             self.current_image_index += 1
             self.show_image()
+        else:
+            print("Already at the last image.")
 
     def show_previous_image(self, event=None):
         """Show the previous image in the folder when navigating backward."""
         if self.current_image_index > 0:
             self.current_image_index -= 1
             self.show_image()
+        else:
+            print("Already at the first image.")
 
     def pick_image(self, event=None):
         """Create a symlink in the 'selects' folder for the current image."""
@@ -164,25 +181,34 @@ class ImageViewer:
 
             # Create symlink to the selected image
             if not os.path.exists(link_path):
-                os.symlink(source_path, link_path)
-                print(f"Selected: {file_name}")
-                self.selected_files.append(file_name)
-                self.update_sidebar()
+                try:
+                    os.symlink(source_path, link_path)
+                    print(f"Selected: {file_name}")
+                    if self.current_image_index not in self.selected_files:
+                        self.selected_files.append(self.current_image_index)
+                    self.update_sidebar()
+                except Exception as e:
+                    print(f"Error selecting image {file_name}: {e}")
             else:
                 print(f"{file_name} is already selected.")
 
     def update_sidebar(self):
-        """Update the sidebar with the selected images."""
+        """Update the sidebar with the selected images, displaying their actual index."""
         self.listbox.delete(0, tk.END)
-        for index, file in enumerate(self.selected_files):
-            display_text = f"{index + 1} - {file}"
+        for index in self.selected_files:
+            file_name = self.image_files[index]
+            display_text = f"{index + 1} - {file_name}"  # Index is 1-based for display purposes
             self.listbox.insert(tk.END, display_text)
 
     def load_selected_images(self):
         """Load the already selected images from the selects folder."""
         if os.path.exists(self.selects_folder):
             selected_files = [f for f in sorted(os.listdir(self.selects_folder)) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
-            self.selected_files.extend(selected_files)
+            for selected_file in selected_files:
+                if selected_file in self.image_files:
+                    index = self.image_files.index(selected_file)
+                    if index not in self.selected_files:
+                        self.selected_files.append(index)
             self.update_sidebar()
 
     def on_sidebar_select(self, event):
@@ -191,10 +217,9 @@ class ImageViewer:
         if selected_index:
             # Strip off the index before the file name
             display_text = self.listbox.get(selected_index[0])
-            file_name = display_text.split(' - ', 1)[1]  # Get file name after the index
-            if file_name in self.image_files:
-                self.current_image_index = self.image_files.index(file_name)
-                self.show_image()
+            index_str, file_name = display_text.split(' - ', 1)  # Get index from display text
+            self.current_image_index = int(index_str) - 1  # Adjust back to 0-based index
+            self.show_image()
 
     def update_image_counter(self):
         """Update the image counter label in the top-right corner."""
@@ -204,6 +229,7 @@ class ImageViewer:
         """Exit full screen and close the application."""
         self.root.attributes('-fullscreen', False)
         self.root.quit()
+
 
 if __name__ == "__main__":
     root = tk.Tk()
