@@ -1,1 +1,2 @@
 pillow==10.4.0
+pymediainfo==6.1.0
