@@ -1,4 +1,3 @@
-
 import os
 import tkinter as tk
 from tkinter import filedialog
@@ -59,19 +58,19 @@ class ImageViewer:
         img_width, img_height = image.size
         ratio = min(max_width/img_width, max_height/img_height)
         new_size = (int(img_width * ratio), int(img_height * ratio))
-        return image.resize(new_size, Image.ANTIALIAS)
+        return image.resize(new_size, Image.LANCZOS)
 
-    def show_next_image(self):
+    def show_next_image(self, event=None):
         if self.current_image_index < len(self.image_files) - 1:
             self.current_image_index += 1
             self.show_image()
 
-    def show_previous_image(self):
+    def show_previous_image(self, event=None):
         if self.current_image_index > 0:
             self.current_image_index -= 1
             self.show_image()
 
-    def pick_image(self):
+    def pick_image(self, event=None):
         """Create a symlink in the 'selects' folder for the current image."""
         current_image = self.image_files[self.current_image_index]
         source_path = os.path.join(self.image_folder, current_image)
@@ -82,7 +81,7 @@ class ImageViewer:
             os.symlink(source_path, link_path)
             print(f"Selected: {current_image}")
 
-    def exit_fullscreen(self):
+    def exit_fullscreen(self, event=None):
         self.root.attributes('-fullscreen', False)
         self.root.quit()
 
