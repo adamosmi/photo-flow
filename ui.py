@@ -13,10 +13,14 @@ class ImageViewer:
         self.root.bind("<Left>", self.show_previous_image)
         self.root.bind("<Right>", self.show_next_image)
         self.root.bind("<Return>", self.pick_image)
+        self.root.bind("g", self.jump_to_image_prompt)
 
         self.image_folder = image_folder
         self.selects_folder = selects_folder
         self.db_file = db_file
+
+        # Sidebar width (to be considered when centering the image)
+        self.sidebar_width = 200
 
         # Initialize database in /tmp
         self.init_db()
@@ -29,7 +33,7 @@ class ImageViewer:
         self.selected_files = []  # List to hold selected file indexes
 
         # Create sidebar for selected images (on the left)
-        self.sidebar = tk.Frame(root, width=200, bg='lightgrey')
+        self.sidebar = tk.Frame(root, width=self.sidebar_width, bg='lightgrey')
         self.sidebar.pack(fill=tk.Y, side=tk.LEFT)
         self.listbox = Listbox(self.sidebar, width=30, height=50)
         self.listbox.pack(side=tk.TOP, fill=tk.Y)
@@ -137,12 +141,20 @@ class ImageViewer:
                 # Resize the image while keeping aspect ratio
                 screen_width = self.root.winfo_screenwidth()
                 screen_height = self.root.winfo_screenheight()
-                image = self.resize_image(image, screen_width, screen_height)
 
-                # Display the image
+                # Available width for the image (subtract sidebar width)
+                available_width = screen_width - self.sidebar_width
+
+                image = self.resize_image(image, available_width, screen_height)
+
+                # Display the image in the center of the available area (to the right of the sidebar)
+                # center_x = self.sidebar_width + available_width // 2
+                center_x = available_width // 2
+                center_y = screen_height // 2
+
                 self.tk_image = ImageTk.PhotoImage(image)
                 self.canvas.delete("all")
-                self.canvas.create_image(screen_width // 2, screen_height // 2, image=self.tk_image, anchor=tk.CENTER)
+                self.canvas.create_image(center_x, center_y, image=self.tk_image, anchor=tk.CENTER)
 
                 # Update image counter
                 self.update_image_counter()
@@ -230,6 +242,43 @@ class ImageViewer:
         self.root.attributes('-fullscreen', False)
         self.root.quit()
 
+    def jump_to_image(self, image_index):
+        """Jump to a specific image by its index."""
+        if 0 <= image_index < self.total_images:
+            self.current_image_index = image_index
+            self.show_image()
+        else:
+            print(f"Index {image_index} is out of bounds. Valid range is 1 to {self.total_images}.")
+    
+    def jump_to_image_prompt(self, event=None):
+        """Prompt the user to enter an image index and jump to that image."""
+        def on_submit():
+            try:
+                index = int(entry.get()) - 1  # Convert to 0-based index
+                self.jump_to_image(index)
+                prompt_window.destroy()
+            except ValueError:
+                print("Invalid input. Please enter a valid number.")
+        
+        # Create a new window for the prompt
+        prompt_window = tk.Toplevel(self.root)
+        prompt_window.title("Go to Image")
+        prompt_window.geometry("500x200")
+        
+        # Label with instructions
+        label = tk.Label(prompt_window, text=f"Enter image index (1-{self.total_images}):")
+        label.pack(pady=10)
+
+        # Entry widget for the user to input the index
+        entry = tk.Entry(prompt_window)
+        entry.pack(pady=5)
+
+        # Button to submit the input
+        submit_button = tk.Button(prompt_window, text="Go", command=on_submit)
+        submit_button.pack(pady=5)
+
+        # Focus on the entry box automatically
+        entry.focus_set()
 
 if __name__ == "__main__":
     root = tk.Tk()
