@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, Listbox
 from PIL import Image, ImageTk, ExifTags, ImageOps
 import io
 
@@ -26,10 +26,22 @@ class ImageViewer:
         self.total_images = len(self.image_files)
         
         self.current_image_index = -1  # Start before the first image
+        self.selected_files = []  # List to hold selected files
 
         # Create canvas to display images
         self.canvas = tk.Canvas(root, bg="white")
-        self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.canvas.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
+
+        # Create sidebar for selected images
+        self.sidebar = tk.Frame(root, width=200, bg='lightgrey')
+        self.sidebar.pack(fill=tk.Y, side=tk.RIGHT)
+        self.listbox = Listbox(self.sidebar, width=30, height=50)
+        self.listbox.pack(side=tk.TOP, fill=tk.Y)
+        self.listbox.bind('<<ListboxSelect>>', self.on_sidebar_select)
+
+        # Create a label for image counter
+        self.image_counter_label = tk.Label(self.canvas, text="", bg="white", font=("Helvetica", 14))
+        self.image_counter_label.place(relx=0.95, rely=0.05, anchor=tk.NE)
 
         # Load the first image when the user presses 'Right' or 'Next'
         self.show_next_image()
@@ -118,6 +130,9 @@ class ImageViewer:
             self.canvas.delete("all")
             self.canvas.create_image(screen_width // 2, screen_height // 2, image=self.tk_image, anchor=tk.CENTER)
 
+            # Update image counter
+            self.update_image_counter()
+
     def resize_image(self, image, max_width, max_height):
         """Resize image while preserving the aspect ratio."""
         img_width, img_height = image.size
@@ -148,8 +163,29 @@ class ImageViewer:
             if not os.path.exists(link_path):
                 os.symlink(source_path, link_path)
                 print(f"Selected: {file_name}")
+                self.selected_files.append(file_name)
+                self.update_sidebar()
             else:
                 print(f"{file_name} is already selected.")
+
+    def update_sidebar(self):
+        """Update the sidebar with the selected images."""
+        self.listbox.delete(0, tk.END)
+        for file in self.selected_files:
+            self.listbox.insert(tk.END, file)
+
+    def on_sidebar_select(self, event):
+        """Navigate to the image when a file is selected in the sidebar."""
+        selected_index = self.listbox.curselection()
+        if selected_index:
+            file_name = self.listbox.get(selected_index[0])
+            if file_name in self.image_files:
+                self.current_image_index = self.image_files.index(file_name)
+                self.show_image()
+
+    def update_image_counter(self):
+        """Update the image counter label in the top-right corner."""
+        self.image_counter_label.config(text=f"{self.current_image_index + 1}/{self.total_images}")
 
     def exit_fullscreen(self, event=None):
         """Exit full screen and close the application."""
