@@ -1,12 +1,11 @@
 import os
-import sqlite3
 import tkinter as tk
-from tkinter import filedialog, Listbox
+from tkinter import filedialog, Listbox, Scrollbar
 from PIL import Image, ImageTk, ExifTags, ImageOps
 import io
 
 class ImageViewer:
-    def __init__(self, root, image_folder, selects_folder, db_file='/tmp/image_data.db'):
+    def __init__(self, root, image_folder, selects_folder):
         self.root = root
         self.root.attributes('-fullscreen', True)
         self.root.bind("<Escape>", self.exit_fullscreen)
@@ -17,16 +16,13 @@ class ImageViewer:
 
         self.image_folder = image_folder
         self.selects_folder = selects_folder
-        self.db_file = db_file
 
         # Sidebar width (to be considered when centering the image)
         self.sidebar_width = 200
 
-        # Initialize database in /tmp
-        self.init_db()
-
         # Get total image count from the folder (for progressive loading)
-        self.image_files = [f for f in sorted(os.listdir(image_folder)) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
+        self.image_files = sorted([f for f in os.listdir(image_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))],
+                                  key=lambda x: os.path.getmtime(os.path.join(image_folder, x)))
         self.total_images = len(self.image_files)
         
         self.current_image_index = -1  # Start before the first image
@@ -35,9 +31,15 @@ class ImageViewer:
         # Create sidebar for selected images (on the left)
         self.sidebar = tk.Frame(root, width=self.sidebar_width, bg='lightgrey')
         self.sidebar.pack(fill=tk.Y, side=tk.LEFT)
-        self.listbox = Listbox(self.sidebar, width=30, height=50)
-        self.listbox.pack(side=tk.TOP, fill=tk.Y)
+
+        # Add scrollbar to sidebar
+        self.scrollbar = Scrollbar(self.sidebar)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.listbox = Listbox(self.sidebar, width=30, height=50, yscrollcommand=self.scrollbar.set)
+        self.listbox.pack(side=tk.LEFT, fill=tk.Y)
         self.listbox.bind('<<ListboxSelect>>', self.on_sidebar_select)
+        self.scrollbar.config(command=self.listbox.yview)
 
         # Create canvas to display images (on the right)
         self.canvas = tk.Canvas(root, bg="white")
@@ -53,67 +55,39 @@ class ImageViewer:
         # Load the first image when the user presses 'Right' or 'Next'
         self.show_next_image()
 
-    def init_db(self):
-        """Initialize the SQLite database in /tmp to store image binary data."""
-        self.conn = sqlite3.connect(self.db_file)
-        self.cursor = self.conn.cursor()
-
-        # Create table for storing image binary data
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS images (
-                id INTEGER PRIMARY KEY,
-                file_name TEXT,
-                image_data BLOB
-            )
-        ''')
-        self.conn.commit()
-
     def load_image_data(self, image_index):
-        """Load image binary data into the SQLite database progressively."""
+        """Read the image data from local files (no database)."""
         file_name = self.image_files[image_index]
-        self.cursor.execute('SELECT id FROM images WHERE file_name = ?', (file_name,))
-        if self.cursor.fetchone() is not None:
-            return  # Image already in the database
-
-        # If not, load the image and store it in the database
         file_path = os.path.join(self.image_folder, file_name)
         try:
             with open(file_path, 'rb') as file:
                 binary_data = file.read()
-                self.cursor.execute('INSERT INTO images (file_name, image_data) VALUES (?, ?)', (file_name, binary_data))
-                self.conn.commit()
+                return binary_data
         except Exception as e:
             print(f"Error loading image {file_name}: {e}")
+            return None
 
     def get_image_data(self, image_index):
-        """Get the binary data and file name of the image at a given index from the database."""
+        """Get the binary data and file name of the image at a given index."""
         if image_index < 0 or image_index >= self.total_images:
             print(f"Invalid image index: {image_index}")
             return None, None
-        
-        self.load_image_data(image_index)  # Load the image data if not already in the database
 
         file_name = self.image_files[image_index]
-        self.cursor.execute('SELECT file_name, image_data FROM images WHERE file_name = ?', (file_name,))
-        result = self.cursor.fetchone()
-        if result:
-            return result
-        else:
-            print(f"Failed to retrieve image data for {file_name}")
-            return None, None
+        image_data = self.load_image_data(image_index)
+        return file_name, image_data
 
     def correct_image_orientation(self, image):
         """Correct image orientation based on EXIF metadata."""
         try:
-            # Get EXIF data
             exif = image._getexif()
             if exif:
+                orientation = None
                 for tag, value in ExifTags.TAGS.items():
                     if value == 'Orientation':
                         orientation = exif.get(tag)
                         break
 
-                # Rotate or flip the image based on the orientation
                 if orientation == 3:
                     image = image.rotate(180, expand=True)
                 elif orientation == 6:
@@ -121,9 +95,7 @@ class ImageViewer:
                 elif orientation == 8:
                     image = image.rotate(90, expand=True)
         except (AttributeError, KeyError, IndexError):
-            # Cases where there is no EXIF data or orientation tag
             pass
-
         return image
 
     def show_image(self):
@@ -132,23 +104,18 @@ class ImageViewer:
 
         if image_data:
             try:
-                # Convert the binary data into a Pillow image
                 image = Image.open(io.BytesIO(image_data))
-
-                # Correct the orientation based on EXIF data
                 image = self.correct_image_orientation(image)
 
-                # Resize the image while keeping aspect ratio
                 screen_width = self.root.winfo_screenwidth()
+                print(f"screen_width: {screen_width}")
                 screen_height = self.root.winfo_screenheight()
+                print(f"screen_height: {screen_height}")
 
-                # Available width for the image (subtract sidebar width)
-                available_width = screen_width - self.sidebar_width
-
+                available_width = self.canvas.winfo_width()
+                print(f"available_width: {available_width}")
                 image = self.resize_image(image, available_width, screen_height)
 
-                # Display the image in the center of the available area (to the right of the sidebar)
-                # center_x = self.sidebar_width + available_width // 2
                 center_x = available_width // 2
                 center_y = screen_height // 2
 
@@ -156,7 +123,6 @@ class ImageViewer:
                 self.canvas.delete("all")
                 self.canvas.create_image(center_x, center_y, image=self.tk_image, anchor=tk.CENTER)
 
-                # Update image counter
                 self.update_image_counter()
             except Exception as e:
                 print(f"Error displaying image {file_name}: {e}")
@@ -191,7 +157,6 @@ class ImageViewer:
             link_path = os.path.join(self.selects_folder, file_name)
             source_path = os.path.join(self.image_folder, file_name)
 
-            # Create symlink to the selected image
             if not os.path.exists(link_path):
                 try:
                     os.symlink(source_path, link_path)
@@ -211,6 +176,7 @@ class ImageViewer:
             file_name = self.image_files[index]
             display_text = f"{index + 1} - {file_name}"  # Index is 1-based for display purposes
             self.listbox.insert(tk.END, display_text)
+        self.listbox.yview_moveto(1)
 
     def load_selected_images(self):
         """Load the already selected images from the selects folder."""
@@ -227,9 +193,8 @@ class ImageViewer:
         """Navigate to the image when a file is selected in the sidebar."""
         selected_index = self.listbox.curselection()
         if selected_index:
-            # Strip off the index before the file name
             display_text = self.listbox.get(selected_index[0])
-            index_str, file_name = display_text.split(' - ', 1)  # Get index from display text
+            index_str, file_name = display_text.split(' - ', 1)
             self.current_image_index = int(index_str) - 1  # Adjust back to 0-based index
             self.show_image()
 
@@ -260,30 +225,24 @@ class ImageViewer:
             except ValueError:
                 print("Invalid input. Please enter a valid number.")
         
-        # Create a new window for the prompt
         prompt_window = tk.Toplevel(self.root)
         prompt_window.title("Go to Image")
         prompt_window.geometry("500x200")
         
-        # Label with instructions
         label = tk.Label(prompt_window, text=f"Enter image index (1-{self.total_images}):")
         label.pack(pady=10)
 
-        # Entry widget for the user to input the index
         entry = tk.Entry(prompt_window)
         entry.pack(pady=5)
 
-        # Button to submit the input
         submit_button = tk.Button(prompt_window, text="Go", command=on_submit)
         submit_button.pack(pady=5)
 
-        # Focus on the entry box automatically
         entry.focus_set()
 
 if __name__ == "__main__":
     root = tk.Tk()
 
-    # Choose the image folder and the "selects" folder
     image_folder = filedialog.askdirectory(title="Select the folder with images")
     selects_folder = filedialog.askdirectory(title="Select the 'selects' folder")
 
