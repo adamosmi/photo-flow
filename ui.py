@@ -47,7 +47,7 @@ class ImageViewer:
                                   key=lambda x: os.path.getmtime(os.path.join(image_folder, x)))
         self.total_images = len(self.image_files)
         
-        self.current_image_index = -1  # Start before the first image
+        self.current_image_index = 0  # Start before the first image
         self.selected_files = []  # List to hold selected file indexes
 
         # Create sidebar for selected images (on the left)
@@ -75,7 +75,7 @@ class ImageViewer:
         self.load_selected_images()
 
         # Load the first image when the user presses 'Right' or 'Next'
-        self.show_next_image()
+        self.root.after(100, self.show_image)
 
     def load_image_data(self, image_index):
         """Read the image data from local files (no database)."""
