@@ -23,6 +23,7 @@ def load_last_session():
     except FileNotFoundError:
         return None, None  # No session file found
 
+
 class ImageViewer:
     def __init__(self, root, image_folder, selects_folder):
         self.root = root
@@ -35,6 +36,10 @@ class ImageViewer:
         self.root.bind("<Shift-Left>", self.show_previous_selected_image)
         self.root.bind("<Shift-Right>", self.show_next_selected_image)
         self.root.bind("<BackSpace>", self.remove_image)
+
+        # Bind Up and Down keys for zooming
+        self.root.bind("<Up>", self.zoom_in)   # Zoom in with Up arrow key
+        self.root.bind("<Down>", self.zoom_out)  # Zoom out with Down arrow key
 
         self.image_folder = image_folder
         self.selects_folder = selects_folder
@@ -50,6 +55,12 @@ class ImageViewer:
         self.current_image_index = 0  # Start before the first image
         self.selected_files = []  # List to hold selected file indexes
 
+        # Zoom and pan variables
+        self.scale_factor = 1.0  # Track the zoom scale
+        self.image_origin_x = 0
+        self.image_origin_y = 0
+        self.drag_data = {"x": 0, "y": 0}  # To track dragging positions
+
         # Create sidebar for selected images (on the left)
         self.sidebar = tk.Frame(root, width=self.sidebar_width, bg='lightgrey')
         self.sidebar.pack(fill=tk.Y, side=tk.LEFT)
@@ -64,12 +75,16 @@ class ImageViewer:
         self.scrollbar.config(command=self.listbox.yview)
 
         # Create canvas to display images (on the right)
-        self.canvas = tk.Canvas(root, bg="white")
+        self.canvas = tk.Canvas(root, bg="white", cursor="fleur")
         self.canvas.pack(fill=tk.BOTH, expand=True, side=tk.RIGHT)
 
         # Create a label for image counter
         self.image_counter_label = tk.Label(self.canvas, text="", bg="white", font=("Helvetica", 14))
         self.image_counter_label.place(relx=0.95, rely=0.05, anchor=tk.NE)
+
+        # Bind events for panning
+        self.canvas.bind("<ButtonPress-1>", self.start_pan)
+        self.canvas.bind("<B1-Motion>", self.do_pan)
 
         # Load selected images in the sidebar on start
         self.load_selected_images()
@@ -129,20 +144,51 @@ class ImageViewer:
                 image = Image.open(io.BytesIO(image_data))
                 image = self.correct_image_orientation(image)
 
-                # screen_width = self.root.winfo_screenwidth()
-                screen_height = self.root.winfo_screenheight()
+                self.original_image = image  # Store the original image for scaling
 
+                self.update_canvas_image()
+                self.update_image_counter()
+
+            except Exception as e:
+                print(f"Error displaying image {file_name}: {e}")
+
+    
+    def update_canvas_image(self):
+        """Updates the image displayed on the canvas based on zoom and panning."""
+        
+        # Get the image data (if it exists)
+        file_name, image_data = self.get_image_data(self.current_image_index)
+
+        if image_data:
+            try:
+                image = Image.open(io.BytesIO(image_data))
+                image = self.correct_image_orientation(image)
+
+                # Get screen and canvas dimensions
+                screen_height = self.root.winfo_screenheight()
                 available_width = self.canvas.winfo_width()
+
+                # Resize the image initially to fit the canvas (based on original logic)
                 image = self.resize_image(image, available_width, screen_height)
 
-                center_x = available_width // 2
-                center_y = screen_height // 2
+                # Now apply zoom to the resized image
+                scaled_image = image.resize(
+                    (int(image.width * self.scale_factor),
+                     int(image.height * self.scale_factor)),
+                    Image.LANCZOS)
 
-                self.tk_image = ImageTk.PhotoImage(image)
+                self.tk_image = ImageTk.PhotoImage(scaled_image)
+
+                # Clear the canvas and apply panning adjustments
                 self.canvas.delete("all")
+
+                # Calculate the center or panned position of the image
+                center_x = available_width // 2 + self.image_origin_x
+                center_y = screen_height // 2 + self.image_origin_y
+
+                # Display the image on the canvas
                 self.canvas.create_image(center_x, center_y, image=self.tk_image, anchor=tk.CENTER)
 
-                self.update_image_counter()
             except Exception as e:
                 print(f"Error displaying image {file_name}: {e}")
 
@@ -153,7 +199,37 @@ class ImageViewer:
         new_size = (int(img_width * ratio), int(img_height * ratio))
         return image.resize(new_size, Image.LANCZOS)
 
+    def zoom_in(self, event=None):
+        """Zoom in the image."""
+        self.scale_factor *= 1.1  # Increase the zoom scale by 10%
+        self.update_canvas_image()
 
+    def zoom_out(self, event=None):
+        """Zoom out the image."""
+        self.scale_factor /= 1.1  # Decrease the zoom scale by 10%
+        self.update_canvas_image()
+
+    def start_pan(self, event):
+        """Initiate panning by storing the current mouse position."""
+        self.drag_data["x"] = event.x
+        self.drag_data["y"] = event.y
+
+    def do_pan(self, event):
+        """Handle panning by adjusting the image origin coordinates."""
+        delta_x = event.x - self.drag_data["x"]
+        delta_y = event.y - self.drag_data["y"]
+
+        self.image_origin_x += delta_x
+        self.image_origin_y += delta_y
+
+        # Update the image position
+        self.update_canvas_image()
+
+        # Update the drag data for the next movement
+        self.drag_data["x"] = event.x
+        self.drag_data["y"] = event.y
+
+    # The rest of the class methods remain unchanged...
     def show_next_image(self, event=None):
         """Show the next image in the folder when navigating forward."""
         if self.current_image_index < self.total_images - 1:
