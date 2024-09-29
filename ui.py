@@ -134,11 +134,13 @@ class ImageViewer:
         new_size = (int(img_width * ratio), int(img_height * ratio))
         return image.resize(new_size, Image.LANCZOS)
 
+
     def show_next_image(self, event=None):
         """Show the next image in the folder when navigating forward."""
         if self.current_image_index < self.total_images - 1:
             self.current_image_index += 1
             self.show_image()
+            self.update_sidebar()  # Update sidebar after navigation
         else:
             print("Already at the last image.")
 
@@ -147,8 +149,10 @@ class ImageViewer:
         if self.current_image_index > 0:
             self.current_image_index -= 1
             self.show_image()
+            self.update_sidebar()  # Update sidebar after navigation
         else:
             print("Already at the first image.")
+
 
     def pick_image(self, event=None):
         """Create a symlink in the 'selects' folder for the current image."""
@@ -169,14 +173,23 @@ class ImageViewer:
             else:
                 print(f"{file_name} is already selected.")
 
+        
     def update_sidebar(self):
         """Update the sidebar with the selected images, displaying their actual index."""
         self.listbox.delete(0, tk.END)
+        
         for index in self.selected_files:
             file_name = self.image_files[index]
             display_text = f"{index + 1} - {file_name}"  # Index is 1-based for display purposes
             self.listbox.insert(tk.END, display_text)
-        self.listbox.yview_moveto(1)
+            
+            # If the current image is selected, highlight it in yellow
+            if index == self.current_image_index:
+                self.listbox.itemconfig(tk.END, {'bg': 'yellow'})
+                self.listbox.see(tk.END)  # Scroll to this item
+            else:
+                self.listbox.itemconfig(tk.END, {'bg': 'white'})
+
 
     def load_selected_images(self):
         """Load the already selected images from the selects folder."""
@@ -239,6 +252,7 @@ class ImageViewer:
         submit_button.pack(pady=5)
 
         entry.focus_set()
+        self.update_sidebar()  # Update sidebar after navigation
 
 
     def show_previous_selected_image(self, event=None):
@@ -258,6 +272,8 @@ class ImageViewer:
             self.show_image()
         else:
             print("No previous selected image.")
+        self.update_sidebar()  # Update sidebar after navigation
+
 
     def show_next_selected_image(self, event=None):
         """Go to the closest next selected image from the current index."""
@@ -276,6 +292,7 @@ class ImageViewer:
             self.show_image()
         else:
             print("No next selected image.")
+        self.update_sidebar()  # Update sidebar after navigation
 
     def remove_image(self, event=None):
         """Remove the current image from the selected list and delete the symlink."""
