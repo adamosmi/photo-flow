@@ -41,6 +41,9 @@ class ImageViewer:
         self.root.bind("<Up>", self.zoom_in)   # Zoom in with Up arrow key
         self.root.bind("<Down>", self.zoom_out)  # Zoom out with Down arrow key
 
+        # Bind Tab key to reset zoom and pan
+        self.root.bind("<Tab>", self.reset_view)
+
         self.image_folder = image_folder
         self.selects_folder = selects_folder
 
@@ -208,6 +211,13 @@ class ImageViewer:
         """Zoom out the image."""
         self.scale_factor /= 1.1  # Decrease the zoom scale by 10%
         self.update_canvas_image()
+
+    def reset_view(self, event=None):
+        """Reset the zoom and panning to the default values."""
+        self.scale_factor = 1.0  # Reset zoom
+        self.image_origin_x = 0  # Reset panning X position
+        self.image_origin_y = 0  # Reset panning Y position
+        self.update_canvas_image()  # Update canvas to reflect reset view
 
     def start_pan(self, event):
         """Initiate panning by storing the current mouse position."""
