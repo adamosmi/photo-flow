@@ -11,7 +11,7 @@ class ImageViewer:
         self.root.bind("<Escape>", self.exit_fullscreen)
         self.root.bind("<Left>", self.show_previous_image)
         self.root.bind("<Right>", self.show_next_image)
-        self.root.bind("<Space>", self.pick_image)
+        self.root.bind("<space>", self.pick_image)
         self.root.bind("g", self.jump_to_image_prompt)
 
         self.image_folder = image_folder
