@@ -3,6 +3,25 @@ import tkinter as tk
 from tkinter import filedialog, Listbox, Scrollbar
 from PIL import Image, ImageTk, ExifTags, ImageOps
 import io
+import json
+
+def save_session(image_folder, selects_folder):
+    """Save the session data (folder paths) to a file."""
+    session_data = {
+        "image_folder": image_folder,
+        "selects_folder": selects_folder
+    }
+    with open('session.json', 'w') as session_file:
+        json.dump(session_data, session_file)
+
+def load_last_session():
+    """Load the last session data if available."""
+    try:
+        with open('session.json', 'r') as session_file:
+            session_data = json.load(session_file)
+            return session_data.get("image_folder"), session_data.get("selects_folder")
+    except FileNotFoundError:
+        return None, None  # No session file found
 
 class ImageViewer:
     def __init__(self, root, image_folder, selects_folder):
@@ -320,9 +339,29 @@ class ImageViewer:
 if __name__ == "__main__":
     root = tk.Tk()
 
-    image_folder = filedialog.askdirectory(title="Select the folder with images")
-    selects_folder = filedialog.askdirectory(title="Select the 'selects' folder")
+    # Load the last session if available
+    last_image_folder, last_selects_folder = load_last_session()
+
+    if last_image_folder and last_selects_folder:
+        # Prompt to resume the last session
+        resume_prompt = tk.messagebox.askyesno("Resume Last Session", f"Would you like to resume your last session?\n"
+                                                                      f"Images: {last_image_folder}\n"
+                                                                      f"Selects: {last_selects_folder}")
+        if resume_prompt:
+            image_folder = last_image_folder
+            selects_folder = last_selects_folder
+        else:
+            image_folder = filedialog.askdirectory(title="Select the folder with images")
+            selects_folder = filedialog.askdirectory(title="Select the 'selects' folder")
+    else:
+        # No previous session, ask the user for folders
+        image_folder = filedialog.askdirectory(title="Select the folder with images")
+        selects_folder = filedialog.askdirectory(title="Select the 'selects' folder")
 
     if image_folder and selects_folder:
+        # Save the session for future use
+        save_session(image_folder, selects_folder)
+
+        # Initialize the viewer with the selected folders
         viewer = ImageViewer(root, image_folder, selects_folder)
         root.mainloop()
