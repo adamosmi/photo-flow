@@ -15,6 +15,7 @@ class ImageViewer:
         self.root.bind("g", self.jump_to_image_prompt)
         self.root.bind("<Shift-Left>", self.show_previous_selected_image)
         self.root.bind("<Shift-Right>", self.show_next_selected_image)
+        self.root.bind("<BackSpace>", self.remove_image)
 
         self.image_folder = image_folder
         self.selects_folder = selects_folder
@@ -275,6 +276,29 @@ class ImageViewer:
             self.show_image()
         else:
             print("No next selected image.")
+
+    def remove_image(self, event=None):
+        """Remove the current image from the selected list and delete the symlink."""
+        if self.current_image_index in self.selected_files:
+            # Get the filename and symlink path
+            file_name = self.image_files[self.current_image_index]
+            link_path = os.path.join(self.selects_folder, file_name)
+
+            # Remove the symlink if it exists
+            if os.path.exists(link_path):
+                try:
+                    os.unlink(link_path)
+                    print(f"Unselected and removed symlink for: {file_name}")
+                except Exception as e:
+                    print(f"Error removing symlink for {file_name}: {e}")
+            
+            # Remove the image from the selected files list
+            self.selected_files.remove(self.current_image_index)
+            
+            # Update the sidebar to reflect the change
+            self.update_sidebar()
+        else:
+            print("Image is not in the selected list.")
 
 if __name__ == "__main__":
     root = tk.Tk()
