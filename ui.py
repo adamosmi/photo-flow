@@ -13,6 +13,8 @@ class ImageViewer:
         self.root.bind("<Right>", self.show_next_image)
         self.root.bind("<space>", self.pick_image)
         self.root.bind("g", self.jump_to_image_prompt)
+        self.root.bind("<Shift-Left>", self.show_previous_selected_image)
+        self.root.bind("<Shift-Right>", self.show_next_selected_image)
 
         self.image_folder = image_folder
         self.selects_folder = selects_folder
@@ -236,6 +238,43 @@ class ImageViewer:
         submit_button.pack(pady=5)
 
         entry.focus_set()
+
+
+    def show_previous_selected_image(self, event=None):
+        """Go to the closest previous selected image from the current index."""
+        if not self.selected_files:
+            return  # No selected files
+
+        # Find the closest previous selected image
+        prev_index = None
+        for idx in reversed(self.selected_files):
+            if idx < self.current_image_index:
+                prev_index = idx
+                break
+
+        if prev_index is not None:
+            self.current_image_index = prev_index
+            self.show_image()
+        else:
+            print("No previous selected image.")
+
+    def show_next_selected_image(self, event=None):
+        """Go to the closest next selected image from the current index."""
+        if not self.selected_files:
+            return  # No selected files
+
+        # Find the closest next selected image
+        next_index = None
+        for idx in self.selected_files:
+            if idx > self.current_image_index:
+                next_index = idx
+                break
+
+        if next_index is not None:
+            self.current_image_index = next_index
+            self.show_image()
+        else:
+            print("No next selected image.")
 
 if __name__ == "__main__":
     root = tk.Tk()
