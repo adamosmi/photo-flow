@@ -11,7 +11,7 @@ class ImageViewer:
         self.root.bind("<Escape>", self.exit_fullscreen)
         self.root.bind("<Left>", self.show_previous_image)
         self.root.bind("<Right>", self.show_next_image)
-        self.root.bind("<Return>", self.pick_image)
+        self.root.bind("<Space>", self.pick_image)
         self.root.bind("g", self.jump_to_image_prompt)
 
         self.image_folder = image_folder
@@ -107,13 +107,10 @@ class ImageViewer:
                 image = Image.open(io.BytesIO(image_data))
                 image = self.correct_image_orientation(image)
 
-                screen_width = self.root.winfo_screenwidth()
-                print(f"screen_width: {screen_width}")
+                # screen_width = self.root.winfo_screenwidth()
                 screen_height = self.root.winfo_screenheight()
-                print(f"screen_height: {screen_height}")
 
                 available_width = self.canvas.winfo_width()
-                print(f"available_width: {available_width}")
                 image = self.resize_image(image, available_width, screen_height)
 
                 center_x = available_width // 2
