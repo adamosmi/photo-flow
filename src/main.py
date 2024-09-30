@@ -19,7 +19,7 @@ VIDEO_EXTENSIONS = [
     ".webm", ".3gp", ".mpeg", ".mpg", ".mts", ".m2ts"
 ]
 
-CAMERA_NAME_ALIASES = {"FUJIFILM_X-T4": "Fuji_XT4"}
+CAMERA_NAME_ALIASES = {"FUJIFILM_X-T4": "Fuji_XT4", "FUJIFILM_X-T20": "Fuji_XT20"}
 
 def hash_file(file_path):
     """Compute the hash of a file based on its content."""
